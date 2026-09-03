@@ -28,7 +28,7 @@
     "graphql": "^16.11.0",
     "graphql-tag": "^2.12.7",
     "inversify": "^6.2.0",
-    "mongodb": "^7.6.0",
+    "mongodb": "^6.21.0",
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {

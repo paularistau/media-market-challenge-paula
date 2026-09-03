@@ -30,6 +30,15 @@ interface EmployeesData {
   employees: Array<{ name: string; code: string }>;
 }
 
+type DestinationFragment =
+  | { __typename: 'PickupLockerDestination'; lockerCode: string; floor: string }
+  | { __typename: 'ShippingAddressDestination'; street: string; postalCode: string; city: string }
+  | { __typename: 'CollectionDeskDestination'; deskNumber: string; area: string };
+
+interface OrderDestinationData {
+  order: { ref: string; destination: DestinationFragment } | null;
+}
+
 interface TransitionData {
   transitionOrder: { ref: string; state: string; assignee: { code: string } | null } | null;
 }
@@ -124,6 +133,30 @@ const RESOLVE_LINE_ITEM_MUTATION = /* GraphQL */ `
   }
 `;
 
+const ORDER_DESTINATION_QUERY = /* GraphQL */ `
+  query OrderDestination($id: ID!) {
+    order(id: $id) {
+      ref
+      destination {
+        __typename
+        ... on PickupLockerDestination {
+          lockerCode
+          floor
+        }
+        ... on ShippingAddressDestination {
+          street
+          postalCode
+          city
+        }
+        ... on CollectionDeskDestination {
+          deskNumber
+          area
+        }
+      }
+    }
+  }
+`;
+
 const EMPLOYEES_QUERY = /* GraphQL */ `
   query Employees {
     employees {
@@ -184,7 +217,6 @@ describe('GraphQL API', () => {
     it('filters by assignee ("My work")', async () => {
       const result = await execute<OrdersData>(api, ORDERS_QUERY, { assigneeId: bakkerId });
       expect(result.errors).toBeUndefined();
-      // Mirrors the original design's own GraphQL activity log comment: 3 orders for this employee.
       expect(result.data?.orders).toHaveLength(3);
     });
   });
@@ -215,6 +247,45 @@ describe('GraphQL API', () => {
     });
   });
 
+  describe('destination union', () => {
+    it('resolves the PickupLockerDestination member via inline fragment', async () => {
+      const result = await execute<OrderDestinationData>(api, ORDER_DESTINATION_QUERY, {
+        id: refToId['ORD-4821'],
+      });
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.order?.destination).toEqual({
+        __typename: 'PickupLockerDestination',
+        lockerCode: 'A-12',
+        floor: 'Ground floor',
+      });
+    });
+
+    it('resolves the ShippingAddressDestination member via inline fragment', async () => {
+      const result = await execute<OrderDestinationData>(api, ORDER_DESTINATION_QUERY, {
+        id: refToId['ORD-4818'],
+      });
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.order?.destination).toEqual({
+        __typename: 'ShippingAddressDestination',
+        street: 'Carrer de Mallorca 214',
+        postalCode: '08008',
+        city: 'Barcelona',
+      });
+    });
+
+    it('resolves the CollectionDeskDestination member via inline fragment', async () => {
+      const result = await execute<OrderDestinationData>(api, ORDER_DESTINATION_QUERY, {
+        id: refToId['ORD-4815'],
+      });
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.order?.destination).toEqual({
+        __typename: 'CollectionDeskDestination',
+        deskNumber: '2',
+        area: 'Customer service',
+      });
+    });
+  });
+
   describe('employees query', () => {
     it('lists the seeded roster', async () => {
       const result = await execute<EmployeesData>(api, EMPLOYEES_QUERY);
@@ -225,7 +296,6 @@ describe('GraphQL API', () => {
 
   describe('transitionOrder — demo scenarios', () => {
     it('rejects skipping straight from OPEN to COMPLETE ("complete an unassigned order")', async () => {
-      // ORD-4796 is OPEN; the state machine rejects the skip before assignment is even considered.
       const result = await execute<TransitionData>(api, TRANSITION_MUTATION, {
         id: refToId['ORD-4796'],
         to: 'COMPLETE',
@@ -254,7 +324,7 @@ describe('GraphQL API', () => {
     });
 
     it('blocks completion while a line item is still pending (none missing)', async () => {
-      const orderId = refToId['ORD-4818']!; // IN_PROGRESS, one PICKED + one PENDING
+      const orderId = refToId['ORD-4818']!;
       const result = await execute<TransitionData>(api, TRANSITION_MUTATION, { id: orderId, to: 'COMPLETE' });
       expect(result.data?.transitionOrder).toBeNull();
       expect(result.errors?.[0]?.extensions?.code).toBe('LINE_ITEMS_PENDING');
@@ -264,7 +334,7 @@ describe('GraphQL API', () => {
   describe('transitionOrder — assignment rules', () => {
     it('requires an assignee to enter IN_PROGRESS', async () => {
       const result = await execute<TransitionData>(api, TRANSITION_MUTATION, {
-        id: refToId['ORD-4809'], // OPEN, unassigned
+        id: refToId['ORD-4809'],
         to: 'IN_PROGRESS',
       });
       expect(result.data?.transitionOrder).toBeNull();
@@ -286,7 +356,6 @@ describe('GraphQL API', () => {
     });
 
     it('rejects claiming an order already assigned to someone else', async () => {
-      // ORD-4791 is OPEN but pre-assigned to R. Matos (EMP-0301).
       const result = await execute<TransitionData>(api, TRANSITION_MUTATION, {
         id: refToId['ORD-4791'],
         to: 'IN_PROGRESS',
@@ -332,7 +401,7 @@ describe('GraphQL API', () => {
 
   describe('line item mutations', () => {
     it('marks a pending line item picked, then unblocks completion once every item is resolved', async () => {
-      const orderId = refToId['ORD-4818']!; // IN_PROGRESS: SSD-PT2T PICKED, MSE-GX9 PENDING
+      const orderId = refToId['ORD-4818']!;
       const picked = await execute<MarkPickedData>(api, MARK_PICKED_MUTATION, { orderId, sku: 'MSE-GX9' });
       expect(picked.errors).toBeUndefined();
       expect(picked.data?.markLineItemPicked.lineItems).toEqual(
@@ -359,7 +428,7 @@ describe('GraphQL API', () => {
     });
 
     it('cancels a missing item on CANCEL, and cancelled items no longer block completion', async () => {
-      const orderId = refToId['ORD-4818']!; // SSD-PT2T PICKED, MSE-GX9 PENDING
+      const orderId = refToId['ORD-4818']!;
       await execute<ReportMissingData>(api, REPORT_MISSING_MUTATION, { orderId, sku: 'MSE-GX9' });
       await execute<ResolveLineItemData>(api, RESOLVE_LINE_ITEM_MUTATION, { orderId, sku: 'MSE-GX9', resolution: 'CANCEL' });
 

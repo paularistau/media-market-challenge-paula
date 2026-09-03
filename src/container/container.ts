@@ -7,12 +7,6 @@ import { OrderService } from '../modules/orders/order.service';
 import { MongoOrderRepository, type OrderRepository } from '../modules/orders/order.repository';
 import { TYPES } from './types';
 
-/**
- * Builds the DI graph for a request-serving process. Takes an already-
- * connected `Db` rather than connecting itself, so bootstrapping (connect,
- * then wire) stays a plain, easy-to-follow sequence in server.ts and tests
- * can hand in a `mongodb-memory-server` Db without touching this function.
- */
 export function createContainer(config: AppConfig, db: Db): Container {
   const container = new Container({ defaultScope: 'Singleton' });
 

@@ -1,10 +1,3 @@
-/**
- * Domain-level errors. Deliberately GraphQL-agnostic — services and
- * repositories throw these, and src/graphql/errors.ts is the only place
- * that knows how to turn a `code` into a GraphQL extensions.code. Keeping
- * them plain Errors means unit tests can assert on `.code` without pulling
- * in any GraphQL machinery.
- */
 export abstract class DomainError extends Error {
   abstract readonly code: string;
 

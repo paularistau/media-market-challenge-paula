@@ -8,11 +8,6 @@ export interface GraphQLContext {
   readonly employeeService: EmployeeService;
 }
 
-/**
- * Services are stateless singletons (no per-request/session state), so we
- * resolve them from the container once and hand back the same pair on every
- * request rather than re-resolving per call.
- */
 export function createContextFactory(container: Container): () => Promise<GraphQLContext> {
   const orderService = container.get<OrderService>(TYPES.OrderService);
   const employeeService = container.get<EmployeeService>(TYPES.EmployeeService);

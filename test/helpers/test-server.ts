@@ -17,7 +17,6 @@ export interface TestApi {
   contextValue: () => Promise<GraphQLContext>;
 }
 
-/** Builds a real Apollo Server + real IoC container against an already-connected test `Db` — no HTTP listener involved. */
 export function createTestApi(db: Db): TestApi {
   const container = createContainer(testConfig, db);
   const server = new ApolloServer<GraphQLContext>({ typeDefs, resolvers, formatError });
@@ -29,11 +28,6 @@ export interface GraphQLTestResult<TData> {
   errors?: readonly { message: string; extensions?: Record<string, unknown> }[];
 }
 
-/**
- * Runs a real GraphQL document through the real schema (no HTTP), and unwraps
- * Apollo's `executeOperation` response envelope down to `{ data, errors }` —
- * which is what every test actually wants to assert on.
- */
 export async function execute<TData = Record<string, unknown>>(
   api: TestApi,
   query: string,

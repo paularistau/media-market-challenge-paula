@@ -33,7 +33,6 @@ export interface OrderRepository {
   findByRef(ref: string): Promise<Order | null>;
   find(filter: OrderFilter): Promise<Order[]>;
   insertMany(orders: NewOrder[]): Promise<Order[]>;
-  /** Persists the full state of an already-existing order (keyed by id). */
   replace(order: Order): Promise<Order>;
   deleteAll(): Promise<void>;
 }
@@ -95,9 +94,6 @@ export class MongoOrderRepository implements OrderRepository {
       query.state = { $in: filter.states };
     }
     if (filter.assigneeId) {
-      // A malformed assigneeId can never match a real ObjectId — return no rows rather
-      // than erroring, since "list orders for this employee" is a reasonable (if empty)
-      // answer for an id that doesn't correspond to anyone.
       if (!isValidObjectId(filter.assigneeId)) {
         return [];
       }

@@ -5,9 +5,6 @@ module.exports = {
   rootDir: '.',
   roots: ['<rootDir>/src', '<rootDir>/test'],
   testMatch: ['**/__tests__/**/*.spec.ts', '**/*.spec.ts'],
-  // reflect-metadata must be loaded before any @injectable/@inject-decorated
-  // class is evaluated; setupFiles runs before the test framework (and thus
-  // before the test file's own imports) so this is early enough.
   setupFiles: ['reflect-metadata'],
   collectCoverage: false,
   collectCoverageFrom: [
@@ -25,7 +22,6 @@ module.exports = {
       statements: 85,
     },
   },
-  // mongodb-memory-server downloads/boots a real mongod; give it room.
   testTimeout: 30000,
   clearMocks: true,
 };

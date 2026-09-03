@@ -67,30 +67,67 @@ already matches them).
 
 ### Example operations
 
+A shared fragment keeps the list, detail, and mutation responses in sync instead of
+repeating the same field selection in every operation:
+
 ```graphql
+fragment OrderSummary on Order {
+  id
+  ref
+  state
+  type
+  assignee { name code }
+}
+
 query MyWork($assigneeId: ID!) {
   orders(assigneeId: $assigneeId) {
-    ref
-    state
+    ...OrderSummary
+    lineItems { sku status }
+  }
+}
+
+query OneOrder($id: ID!) {
+  order(id: $id) {
+    ...OrderSummary
     lineItems { sku status }
   }
 }
 
 mutation Claim($id: ID!, $employeeId: ID!) {
   transitionOrder(id: $id, to: IN_PROGRESS, employeeId: $employeeId) {
-    ref
-    state
-    assignee { name code }
+    ...OrderSummary
   }
 }
 
 mutation Complete($id: ID!) {
   transitionOrder(id: $id, to: COMPLETE) {
-    ref
-    state
+    ...OrderSummary
   }
 }
 ```
+
+`destination` is a real GraphQL `union` (`PickupLockerDestination | ShippingAddressDestination
+| CollectionDeskDestination`), not one flat type with an unstructured `text` field — each
+fulfilment method has its own distinct fields, so selecting them needs an inline fragment per
+member, plus `__typename` to tell them apart on the client:
+
+```graphql
+query OrderDestination($id: ID!) {
+  order(id: $id) {
+    ref
+    destination {
+      __typename
+      ... on PickupLockerDestination { lockerCode floor }
+      ... on ShippingAddressDestination { street postalCode city }
+      ... on CollectionDeskDestination { deskNumber area }
+    }
+  }
+}
+```
+
+`order.resolvers.ts` supplies the matching `Destination.__resolveType`, which is what a
+`union` (unlike an object type) requires — GraphQL can't infer which concrete type a resolved
+value is on its own.
 
 A rejected mutation returns a standard GraphQL error with a stable `extensions.code`
 (`INVALID_TRANSITION`, `ASSIGNEE_REQUIRED`, `ALREADY_ASSIGNED`, `LINE_ITEM_MISSING`,
