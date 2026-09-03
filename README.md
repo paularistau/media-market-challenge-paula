@@ -65,10 +65,79 @@ npm run dev                 # starts the API at http://localhost:4000 with a Gra
 Copy `.env.example` to `.env` if you want to override the defaults (Docker Compose
 already matches them).
 
-### Example operations
+## Manual testing (Apollo Sandbox)
 
-A shared fragment keeps the list, detail, and mutation responses in sync instead of
-repeating the same field selection in every operation:
+With the server running (`npm run dev`), open `http://localhost:4000` — Apollo Server
+serves the embedded Sandbox automatically outside `production`. There's no auth, so
+there are no headers to set.
+
+Order and employee ids are Mongo `ObjectId`s generated fresh by every `npm run seed`,
+so every operation below takes ids as **variables** instead of hardcoding them — run
+the bootstrap query first and copy from its response.
+
+### Grab live ids first
+
+```graphql
+query Bootstrap {
+  employees {
+    id
+    name
+    code
+  }
+  orders {
+    id
+    ref
+    type
+    state
+    assignee { id name code }
+    lineItems { sku status }
+  }
+}
+```
+
+### Seeded fixtures
+
+Match by `ref` (stable across reseeds) against the ids Bootstrap returns (those
+change every time):
+
+| Ref | Type | State | Assignee | Line items | Good for |
+|---|---|---|---|---|---|
+| ORD-4821 | PICKUP | OPEN | — | 3 items, all PENDING | Claim flow, `ASSIGNEE_REQUIRED`, skip-ahead `INVALID_TRANSITION` |
+| ORD-4818 | SHIP | IN_PROGRESS | N. Bakker (EMP-0714) | 1 PICKED, 1 PENDING | `LINE_ITEMS_PENDING` on complete |
+| ORD-4815 | PICKUP | IN_PROGRESS | N. Bakker (EMP-0714) | 4 items, 2 PICKED / 2 PENDING | `markLineItemPicked`, `reportLineItemMissing`, full complete walkthrough |
+| ORD-4809 | SHIP | OPEN | — | 1 item, PENDING | Simple single-item claim |
+| ORD-4802 | PICKUP | COMPLETE | N. Bakker (EMP-0714) | 2 items, both PICKED | `ORDER_CLOSED`, terminal-state `INVALID_TRANSITION` |
+| ORD-4796 | SHIP | OPEN | — | 5 items, all PENDING | Larger order, list/filter tests |
+| ORD-4791 | PICKUP | OPEN | R. Matos (EMP-0301) | 1 item, PENDING | **OPEN but already assigned** — claiming with no `employeeId` succeeds; claiming with someone else's id → `ALREADY_ASSIGNED` |
+| ORD-4788 | SHIP | COMPLETE | R. Matos (EMP-0301) | 3 items, all PICKED | A second closed order |
+
+Employees: **N. Bakker** (`EMP-0714`), **R. Matos** (`EMP-0301`), **S. Delgado**
+(`EMP-0552` — seeded but never assigned to an order, useful as a "fresh" `employeeId`).
+
+### Queries
+
+```graphql
+query OpenOrders {
+  orders(state: [OPEN]) {
+    id
+    ref
+    type
+    assignee { name code }
+  }
+}
+
+query MyWork($assigneeId: ID!) {
+  orders(assigneeId: $assigneeId) {
+    id
+    ref
+    state
+    lineItems { sku status }
+  }
+}
+```
+
+Order detail, using a shared fragment so list, detail, and mutation responses stay in
+sync instead of repeating the same field selection everywhere:
 
 ```graphql
 fragment OrderSummary on Order {
@@ -79,29 +148,12 @@ fragment OrderSummary on Order {
   assignee { name code }
 }
 
-query MyWork($assigneeId: ID!) {
-  orders(assigneeId: $assigneeId) {
-    ...OrderSummary
-    lineItems { sku status }
-  }
-}
-
 query OneOrder($id: ID!) {
   order(id: $id) {
     ...OrderSummary
-    lineItems { sku status }
-  }
-}
-
-mutation Claim($id: ID!, $employeeId: ID!) {
-  transitionOrder(id: $id, to: IN_PROGRESS, employeeId: $employeeId) {
-    ...OrderSummary
-  }
-}
-
-mutation Complete($id: ID!) {
-  transitionOrder(id: $id, to: COMPLETE) {
-    ...OrderSummary
+    customer { name phone }
+    lineItems { sku name quantity location status }
+    history { state at by }
   }
 }
 ```
@@ -127,12 +179,102 @@ query OrderDestination($id: ID!) {
 
 `order.resolvers.ts` supplies the matching `Destination.__resolveType`, which is what a
 `union` (unlike an object type) requires — GraphQL can't infer which concrete type a resolved
-value is on its own.
+value is on its own. Try one id of each type to exercise all three branches — ORD-4821
+(locker), ORD-4818 (shipping), ORD-4815 (desk).
+
+### Mutations
+
+Claim + transition (`OPEN` → `IN_PROGRESS`) in one call:
+
+```graphql
+mutation Claim($id: ID!, $employeeId: ID!) {
+  transitionOrder(id: $id, to: IN_PROGRESS, employeeId: $employeeId) {
+    id
+    ref
+    state
+    assignee { name code }
+    history { state at by }
+  }
+}
+```
+Variables: `{ "id": "<ORD-4821's id>", "employeeId": "<S. Delgado's id>" }` — ORD-4821 is
+unassigned, so this succeeds.
+
+Transitioning an `OPEN` order that's already assigned needs no `employeeId`:
+
+```graphql
+mutation ClaimAlreadyAssigned($id: ID!) {
+  transitionOrder(id: $id, to: IN_PROGRESS) {
+    id
+    ref
+    state
+    assignee { name code }
+  }
+}
+```
+Variables: `{ "id": "<ORD-4791's id>" }` — it transitions using the existing assignee
+(R. Matos).
+
+Line items:
+
+```graphql
+mutation PickItem($orderId: ID!, $sku: String!) {
+  markLineItemPicked(orderId: $orderId, sku: $sku) {
+    ref
+    lineItems { sku status }
+  }
+}
+
+mutation ReportMissing($orderId: ID!, $sku: String!) {
+  reportLineItemMissing(orderId: $orderId, sku: $sku) {
+    ref
+    lineItems { sku status }
+  }
+}
+
+mutation ResolveLineItem($orderId: ID!, $sku: String!, $resolution: LineItemResolution!) {
+  resolveLineItem(orderId: $orderId, sku: $sku, resolution: $resolution) {
+    ref
+    lineItems { sku status }
+  }
+}
+```
+
+`resolveLineItem` only works on a line item that's currently `MISSING` — run
+`ReportMissing` on it first. `RECHECK` sends it back to `PENDING`, `CANCEL` sends it to
+`CANCELLED` (both unblock completion).
+
+Complete an order — blocked until every line item is `PICKED` or `CANCELLED`:
+
+```graphql
+mutation Complete($id: ID!) {
+  transitionOrder(id: $id, to: COMPLETE) {
+    id
+    ref
+    state
+    history { state at by }
+  }
+}
+```
+
+### Error scenarios
 
 A rejected mutation returns a standard GraphQL error with a stable `extensions.code`
-(`INVALID_TRANSITION`, `ASSIGNEE_REQUIRED`, `ALREADY_ASSIGNED`, `LINE_ITEM_MISSING`,
-`LINE_ITEMS_PENDING`, `ORDER_CLOSED`, `NOT_FOUND`, `BAD_USER_INPUT`) rather than a
-generic 500, so a client can branch on the failure reason.
+rather than a generic 500, so a client can branch on the failure reason. Run these
+against a fresh seed (`npm run seed`) if an earlier test already moved one of these
+orders along.
+
+| Code | Trigger |
+|---|---|
+| `ASSIGNEE_REQUIRED` | `transitionOrder(id: "<ORD-4821>", to: IN_PROGRESS)` with no `employeeId` — the order is unassigned |
+| `ALREADY_ASSIGNED` | `transitionOrder(id: "<ORD-4791>", to: IN_PROGRESS, employeeId: "<S. Delgado's id>")` — ORD-4791 is already assigned to Matos |
+| `INVALID_TRANSITION` (skip) | `transitionOrder(id: "<ORD-4821>", to: COMPLETE)` — OPEN can only move to IN_PROGRESS |
+| `INVALID_TRANSITION` (terminal) | `transitionOrder(id: "<ORD-4802>", to: IN_PROGRESS)` — already COMPLETE |
+| `LINE_ITEMS_PENDING` | `transitionOrder(id: "<ORD-4818>", to: COMPLETE)` — has a PENDING line item |
+| `LINE_ITEM_MISSING` | `reportLineItemMissing(orderId: "<ORD-4815>", sku: "AIR-F5L")`, then `transitionOrder(id: "<ORD-4815>", to: COMPLETE)` |
+| `ORDER_CLOSED` | `markLineItemPicked(orderId: "<ORD-4802>", sku: "KBD-M75")` — ORD-4802 is COMPLETE and read-only |
+| `NOT_FOUND` | `transitionOrder(id: "64a000000000000000000001", to: IN_PROGRESS)` — well-formed id, nothing matches (same code for an unknown `sku` or unknown `employeeId`) |
+| `BAD_USER_INPUT` | `order(id: "not-an-id")`, or `resolveLineItem(orderId: "<ORD-4815>", sku: "AIR-F5L", resolution: RECHECK)` while that item is still `PENDING` rather than `MISSING` |
 
 ## Testing
 
