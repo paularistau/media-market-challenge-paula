@@ -27,9 +27,27 @@ export const orderTypeDefs = /* GraphQL */ `
     phone: String!
   }
 
-  type Destination {
-    kind: String!
-    text: String!
+  """
+  How this order reaches the customer. A real GraphQL union: each fulfilment method
+  has its own distinct fields, so clients select them with inline fragments
+  (... on ShippingAddressDestination { street city }).
+  """
+  union Destination = PickupLockerDestination | ShippingAddressDestination | CollectionDeskDestination
+
+  type PickupLockerDestination {
+    lockerCode: String!
+    floor: String!
+  }
+
+  type ShippingAddressDestination {
+    street: String!
+    postalCode: String!
+    city: String!
+  }
+
+  type CollectionDeskDestination {
+    deskNumber: String!
+    area: String!
   }
 
   type LineItem {
@@ -76,13 +94,17 @@ export const orderTypeDefs = /* GraphQL */ `
 
     To move OPEN -> IN_PROGRESS, the order needs an assignee: pass employeeId to
     claim + transition it in one call, or omit it if the order is already assigned.
+
+    Deliberately nullable: a rejected mutation nulls only this field, alongside a
+    coded error in the response's errors[] — not the whole response, which a
+    non-null return type would force on any failure.
     """
-    transitionOrder(id: ID!, to: OrderState!, employeeId: ID): Order!
-    "Marks a PENDING line item as PICKED."
-    markLineItemPicked(orderId: ID!, sku: String!): Order!
+    transitionOrder(id: ID!, to: OrderState!, employeeId: ID): Order
+    "Marks a PENDING line item as PICKED. Nullable for the same reason as transitionOrder."
+    markLineItemPicked(orderId: ID!, sku: String!): Order
     "Marks a PENDING line item as MISSING, which blocks completion until resolved."
-    reportLineItemMissing(orderId: ID!, sku: String!): Order!
+    reportLineItemMissing(orderId: ID!, sku: String!): Order
     "Resolves a MISSING line item back to PENDING (recheck) or forward to CANCELLED."
-    resolveLineItem(orderId: ID!, sku: String!, resolution: LineItemResolution!): Order!
+    resolveLineItem(orderId: ID!, sku: String!, resolution: LineItemResolution!): Order
   }
 `;

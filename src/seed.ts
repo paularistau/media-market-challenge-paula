@@ -6,7 +6,6 @@ import { MongoOrderRepository } from './modules/orders/order.repository';
 import { buildOrderSeed } from './modules/orders/order.seed';
 import { connectMongo } from './server';
 
-/** Wipes and reseeds the configured database. Bypasses the IoC container — a seed script is a one-shot CLI job, not a request-serving process. */
 async function seed(): Promise<void> {
   const config = loadConfig();
   const { client, db } = await connectMongo(config.mongo.uri, config.mongo.dbName);

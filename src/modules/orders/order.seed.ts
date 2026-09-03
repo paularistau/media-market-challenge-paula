@@ -1,12 +1,6 @@
 import type { Employee } from '../employees/employee.types';
-import type { HistoryEntry, LineItem, LineItemStatus, NewOrder } from './order.types';
+import type { Destination, HistoryEntry, LineItem, LineItemStatus, NewOrder } from './order.types';
 
-/**
- * 8 orders spanning every state and edge case worth demoing, adapted from
- * the original Claude Design mockup's seed data (same refs/customers/SKUs)
- * so the live demo matches what was designed. Timestamps are relative to
- * "now" at seed time rather than baked in, so the data always looks fresh.
- */
 export function buildOrderSeed(employeesByCode: Record<string, Employee>): NewOrder[] {
   const now = Date.now();
   const minutesAgo = (n: number) => new Date(now - n * 60_000);
@@ -27,6 +21,23 @@ export function buildOrderSeed(employeesByCode: Record<string, Employee>): NewOr
   const history = (entries: Array<[state: HistoryEntry['state'], minutesAgo: number, by: string]>): HistoryEntry[] =>
     entries.map(([state, mins, by]) => ({ state, at: minutesAgo(mins), by }));
 
+  const locker = (lockerCode: string, floor: string): Destination => ({
+    kind: 'PICKUP_LOCKER',
+    lockerCode,
+    floor,
+  });
+  const shipping = (street: string, postalCode: string, city: string): Destination => ({
+    kind: 'SHIPPING_ADDRESS',
+    street,
+    postalCode,
+    city,
+  });
+  const desk = (deskNumber: string, area: string): Destination => ({
+    kind: 'COLLECTION_DESK',
+    deskNumber,
+    area,
+  });
+
   const orders: NewOrder[] = [
     {
       ref: 'ORD-4821',
@@ -34,7 +45,7 @@ export function buildOrderSeed(employeesByCode: Record<string, Employee>): NewOr
       state: 'OPEN',
       assigneeId: null,
       customer: { name: 'Ana Ferreira', phone: '+34 6•• ••1 204' },
-      destination: { kind: 'PICKUP_LOCKER', text: 'Locker A-12 · Ground floor' },
+      destination: locker('A-12', 'Ground floor'),
       lineItems: [
         item('TV-OL55X', 'OLED 4K TV 55"', 1, 'A3-14'),
         item('AUD-ANC7', 'ANC Headphones Mk7', 1, 'C1-02'),
@@ -50,7 +61,7 @@ export function buildOrderSeed(employeesByCode: Record<string, Employee>): NewOr
       state: 'IN_PROGRESS',
       assigneeId: bakker.id,
       customer: { name: 'Tomás Silva', phone: '+351 9•• ••7 812' },
-      destination: { kind: 'SHIPPING_ADDRESS', text: 'Carrer de Mallorca 214 · 08008 Barcelona' },
+      destination: shipping('Carrer de Mallorca 214', '08008', 'Barcelona'),
       lineItems: [
         item('SSD-PT2T', 'Portable SSD 2 TB', 1, 'B2-08', 'PICKED'),
         item('MSE-GX9', 'Gaming mouse GX9', 1, 'B5-22'),
@@ -68,7 +79,7 @@ export function buildOrderSeed(employeesByCode: Record<string, Employee>): NewOr
       state: 'IN_PROGRESS',
       assigneeId: bakker.id,
       customer: { name: 'Marta Kowalski', phone: '+48 5•• ••3 090' },
-      destination: { kind: 'COLLECTION_DESK', text: 'Desk 2 · Customer service' },
+      destination: desk('2', 'Customer service'),
       lineItems: [
         item('ESP-BR30', 'Espresso machine BR30', 1, 'D1-05', 'PICKED'),
         item('VAC-RB4', 'Robot vacuum RB4', 1, 'D2-19', 'PICKED'),
@@ -88,7 +99,7 @@ export function buildOrderSeed(employeesByCode: Record<string, Employee>): NewOr
       state: 'OPEN',
       assigneeId: null,
       customer: { name: 'Jonas Weber', phone: '+49 1•• ••4 663' },
-      destination: { kind: 'SHIPPING_ADDRESS', text: 'Kolonnenstr. 8 · 10829 Berlin' },
+      destination: shipping('Kolonnenstr. 8', '10829', 'Berlin'),
       lineItems: [item('WCH-46M', 'Smartwatch 46 mm', 1, 'C2-04')],
       history: history([['OPEN', 64, 'system']]),
       createdAt: minutesAgo(64),
@@ -100,7 +111,7 @@ export function buildOrderSeed(employeesByCode: Record<string, Employee>): NewOr
       state: 'COMPLETE',
       assigneeId: bakker.id,
       customer: { name: 'Lucía Romero', phone: '+34 6•• ••8 551' },
-      destination: { kind: 'PICKUP_LOCKER', text: 'Locker B-04 · Ground floor' },
+      destination: locker('B-04', 'Ground floor'),
       lineItems: [
         item('KBD-M75', 'Mechanical keyboard M75', 1, 'B4-02', 'PICKED'),
         item('HUB-USB7', 'USB hub 7-port', 1, 'C4-09', 'PICKED'),
@@ -119,7 +130,7 @@ export function buildOrderSeed(employeesByCode: Record<string, Employee>): NewOr
       state: 'OPEN',
       assigneeId: null,
       customer: { name: 'Dóra Novák', phone: '+36 3•• ••2 417' },
-      destination: { kind: 'SHIPPING_ADDRESS', text: 'Nádor u. 11 · 1051 Budapest' },
+      destination: shipping('Nádor u. 11', '1051', 'Budapest'),
       lineItems: [
         item('PRN-LJ2', 'Laser printer LJ2', 1, 'E1-03'),
         item('TNR-LJ2', 'Toner LJ2 black', 2, 'E1-04'),
@@ -132,15 +143,12 @@ export function buildOrderSeed(employeesByCode: Record<string, Employee>): NewOr
       updatedAt: minutesAgo(140),
     },
     {
-      // Deliberately OPEN *and* already assigned (e.g. pre-assigned by a
-      // supervisor before being claimed/scanned) — good coverage for the
-      // ALREADY_ASSIGNED rule when a different employee tries to claim it.
       ref: 'ORD-4791',
       type: 'PICKUP',
       state: 'OPEN',
       assigneeId: matos.id,
       customer: { name: 'Ivan Petrov', phone: '+31 6•• ••9 328' },
-      destination: { kind: 'PICKUP_LOCKER', text: 'Locker A-03 · Ground floor' },
+      destination: locker('A-03', 'Ground floor'),
       lineItems: [item('CAM-AC5', 'Action camera AC5', 1, 'C3-07')],
       history: history([['OPEN', 160, 'system']]),
       createdAt: minutesAgo(160),
@@ -152,7 +160,7 @@ export function buildOrderSeed(employeesByCode: Record<string, Employee>): NewOr
       state: 'COMPLETE',
       assigneeId: matos.id,
       customer: { name: 'Sara Haddad', phone: '+33 7•• ••5 174' },
-      destination: { kind: 'SHIPPING_ADDRESS', text: '12 rue Oberkampf · 75011 Paris' },
+      destination: shipping('12 rue Oberkampf', '75011', 'Paris'),
       lineItems: [
         item('MON-27Q', 'Monitor 27" QHD', 1, 'A2-16', 'PICKED'),
         item('ARM-DUAL', 'Dual monitor arm', 1, 'A2-21', 'PICKED'),

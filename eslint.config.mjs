@@ -8,8 +8,6 @@ export default tseslint.config(
     ignores: ['dist/**', 'coverage/**', 'node_modules/**'],
   },
   {
-    // Plain CJS/ESM config files (this file included) aren't part of the
-    // tsconfig project and just need Node's ambient globals recognised.
     files: ['**/*.{js,mjs,cjs}'],
     languageOptions: {
       globals: {

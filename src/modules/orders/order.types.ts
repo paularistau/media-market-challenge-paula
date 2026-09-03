@@ -8,10 +8,26 @@ export interface Customer {
   readonly phone: string;
 }
 
-export interface Destination {
-  readonly kind: string;
-  readonly text: string;
+export interface PickupLockerDestination {
+  readonly kind: 'PICKUP_LOCKER';
+  readonly lockerCode: string;
+  readonly floor: string;
 }
+
+export interface ShippingAddressDestination {
+  readonly kind: 'SHIPPING_ADDRESS';
+  readonly street: string;
+  readonly postalCode: string;
+  readonly city: string;
+}
+
+export interface CollectionDeskDestination {
+  readonly kind: 'COLLECTION_DESK';
+  readonly deskNumber: string;
+  readonly area: string;
+}
+
+export type Destination = PickupLockerDestination | ShippingAddressDestination | CollectionDeskDestination;
 
 export interface LineItem {
   readonly sku: string;
@@ -24,7 +40,6 @@ export interface LineItem {
 export interface HistoryEntry {
   readonly state: OrderState;
   readonly at: Date;
-  /** Employee code, or "system" for the initial OPEN entry laid down at seed time. */
   readonly by: string;
 }
 

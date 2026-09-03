@@ -15,7 +15,6 @@ import type { EmployeeService } from '../employees/employee.service';
 import type { OrderRepository } from './order.repository';
 import type { LineItemResolution, LineItemStatus, Order, OrderFilter, OrderState } from './order.types';
 
-/** The one and only legal path forward. COMPLETE has no successor — it's terminal. */
 const NEXT_STATE: Record<OrderState, OrderState | null> = {
   OPEN: 'IN_PROGRESS',
   IN_PROGRESS: 'COMPLETE',
@@ -33,12 +32,6 @@ export class OrderService {
     return this.orders.find(filter);
   }
 
-  /**
-   * A malformed id is still BAD_USER_INPUT, but a well-formed id that simply
-   * doesn't match anything resolves to `null` rather than erroring — "checking
-   * the details of an order" that doesn't exist is a normal, not-exceptional,
-   * outcome for a nullable single-item query.
-   */
   async getOrder(id: string): Promise<Order | null> {
     if (!isValidObjectId(id)) {
       throw new BadUserInputError(`"${id}" is not a valid order id.`);
@@ -46,17 +39,6 @@ export class OrderService {
     return this.orders.findById(id);
   }
 
-  /**
-   * Moves an order one step forward in the state machine.
-   *
-   * - OPEN -> IN_PROGRESS -> COMPLETE only; skipping or reverting is rejected.
-   * - Entering IN_PROGRESS requires an assignee. If the order has none yet and
-   *   an `employeeId` is supplied, that employee is assigned and the order is
-   *   transitioned in the same operation (mirrors a "claim" action) rather
-   *   than requiring two separate calls.
-   * - Entering COMPLETE requires every line item to be PICKED or CANCELLED —
-   *   any still PENDING or MISSING blocks it.
-   */
   async transitionOrder(id: string, to: OrderState, employeeId?: string | null): Promise<Order> {
     const order = await this.requireOrder(id);
 

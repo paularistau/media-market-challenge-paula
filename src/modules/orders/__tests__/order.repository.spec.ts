@@ -11,7 +11,7 @@ function newOrder(overrides: Partial<NewOrder> = {}): NewOrder {
     state: 'OPEN',
     assigneeId: null,
     customer: { name: 'Ana Ferreira', phone: '+34 600 000 000' },
-    destination: { kind: 'PICKUP_LOCKER', text: 'Locker A-1' },
+    destination: { kind: 'PICKUP_LOCKER', lockerCode: 'A-1', floor: 'Ground floor' },
     lineItems: [{ sku: 'SKU-1', name: 'Widget', quantity: 1, location: 'A1-01', status: 'PENDING' }],
     history: [{ state: 'OPEN', at: now, by: 'system' }],
     createdAt: now,

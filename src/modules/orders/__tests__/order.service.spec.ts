@@ -31,7 +31,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     state: 'OPEN',
     assigneeId: null,
     customer: { name: 'Ana Ferreira', phone: '+34 600 000 000' },
-    destination: { kind: 'PICKUP_LOCKER', text: 'Locker A-1' },
+    destination: { kind: 'PICKUP_LOCKER', lockerCode: 'A-1', floor: 'Ground floor' },
     lineItems: [{ sku: 'SKU-1', name: 'Widget', quantity: 1, location: 'A1-01', status: 'PENDING' }],
     history: [{ state: 'OPEN', at: now, by: 'system' }],
     createdAt: now,
@@ -164,7 +164,7 @@ describe('OrderService.transitionOrder', () => {
   });
 
   it('blocks completion while a line item is still PENDING', async () => {
-    const order = makeOrder({ state: 'IN_PROGRESS', assigneeId: bakker.id }); // default fixture item is PENDING
+    const order = makeOrder({ state: 'IN_PROGRESS', assigneeId: bakker.id });
     const repo = makeRepository(order);
     const service = new OrderService(repo, makeEmployeeService({ [bakker.id]: bakker }) as unknown as EmployeeService);
 
@@ -262,7 +262,7 @@ describe('OrderService line item mutations', () => {
   });
 
   it('rejects resolving a line item that is not MISSING', async () => {
-    const order = makeOrder({ state: 'IN_PROGRESS', assigneeId: bakker.id }); // PENDING by default
+    const order = makeOrder({ state: 'IN_PROGRESS', assigneeId: bakker.id });
     const repo = makeRepository(order);
     const service = new OrderService(repo, makeEmployeeService({}) as unknown as EmployeeService);
 

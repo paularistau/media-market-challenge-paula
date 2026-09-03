@@ -1,6 +1,12 @@
 import type { GraphQLContext } from '../../graphql/context';
 import type { Employee } from '../employees/employee.types';
-import type { LineItemResolution, Order, OrderState } from './order.types';
+import type { Destination, LineItemResolution, Order, OrderState } from './order.types';
+
+const DESTINATION_TYPENAME: Record<Destination['kind'], string> = {
+  PICKUP_LOCKER: 'PickupLockerDestination',
+  SHIPPING_ADDRESS: 'ShippingAddressDestination',
+  COLLECTION_DESK: 'CollectionDeskDestination',
+};
 
 interface OrdersArgs {
   state?: OrderState[];
@@ -39,5 +45,8 @@ export const orderResolvers = {
   Order: {
     assignee: (parent: Order, _args: unknown, ctx: GraphQLContext): Promise<Employee | null> =>
       parent.assigneeId ? ctx.employeeService.findEmployee(parent.assigneeId) : Promise.resolve(null),
+  },
+  Destination: {
+    __resolveType: (destination: Destination): string => DESTINATION_TYPENAME[destination.kind],
   },
 };

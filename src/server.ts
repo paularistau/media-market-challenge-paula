@@ -17,7 +17,6 @@ export async function connectMongo(uri: string, dbName: string): Promise<{ clien
   return { client, db: client.db(dbName) };
 }
 
-/** Connects to Mongo, wires the container, and starts listening. Used by src/index.ts. */
 export async function bootstrap(): Promise<{ url: string; client: MongoClient }> {
   const config = loadConfig();
   const { client, db } = await connectMongo(config.mongo.uri, config.mongo.dbName);

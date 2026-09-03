@@ -43,11 +43,6 @@ function readNodeEnv(): NodeEnv {
   );
 }
 
-/**
- * Reads and validates configuration from the environment (see .env.example).
- * Called once at bootstrap; the resulting AppConfig is what gets bound into
- * the IoC container, rather than modules reading process.env ad hoc.
- */
 export function loadConfig(): AppConfig {
   return {
     nodeEnv: readNodeEnv(),

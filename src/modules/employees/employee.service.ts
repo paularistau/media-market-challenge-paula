@@ -13,12 +13,10 @@ export class EmployeeService {
     return this.employees.findAll();
   }
 
-  /** Non-throwing lookup, for field resolvers where a missing/unset id just means "no assignee". */
   findEmployee(id: string): Promise<Employee | null> {
     return this.employees.findById(id);
   }
 
-  /** Throwing lookup, for anywhere an employee id is a required, must-exist argument. */
   async getEmployee(id: string): Promise<Employee> {
     if (!isValidObjectId(id)) {
       throw new BadUserInputError(`"${id}" is not a valid employee id.`);
